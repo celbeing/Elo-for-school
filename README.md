@@ -19,7 +19,7 @@
 ## 🚀 빠른 시작 가이드
 
 ### 1. 프로그램 실행하기
-1. 본 저장소의 [`Elo for school.html`](./Elo_for_school.html) 파일을 다운로드합니다.
+1. 본 저장소의 [`Elo for school.html`](https://github.com/celbeing/Elo-for-school/raw/refs/heads/main/Elo_for_school.html) 파일을 다운로드합니다.
 2. 다운로드한 파일을 크롬(Chrome)이나 웨일(Whale) 등 최신 웹 브라우저로 엽니다.
 3. 바로 오프라인(로컬 스토리지 기반)으로 사용하거나, 아래 절차에 따라 구글 시트와 연동합니다.
 
