@@ -40,10 +40,13 @@
    {"title":"우리 반 체스리그","players":[],"matches":[]}
 
 ![JSON 문자열 확인](https://github.com/user-attachments/assets/8c2a16c7-25ea-4689-acf2-45b4449b80d7)
+
 3. 함께 복제된 Apps Script 파일을 엽니다.
+
 ![Apps Script 파일 열기](https://github.com/user-attachments/assets/795e30dc-5a9e-468a-b486-33c7f043cced)
 
 4. Apps Script를 새로 배포합니다.
+
 ![Apps Script 새 배포](https://github.com/user-attachments/assets/20781314-7432-4619-904e-047b1c8a298c)
 
 ![Apps Script 새 배포](https://github.com/user-attachments/assets/a12084bc-ee94-432a-b463-545fb151d414)
@@ -59,6 +62,7 @@
 ![Apps Script 새 배포](https://github.com/user-attachments/assets/435decdc-3044-404b-b6d1-92f66ea25459)
 
 5. 배포된 웹 앱 URL을 복사합니다.
+
 ![웹 앱 URL 복사](https://github.com/user-attachments/assets/b8ab41cf-cdb4-4081-a222-c4835daed60b)
 
 ![웹 앱 URL 복사](https://github.com/user-attachments/assets/c9391b2a-fba8-4ad4-a219-b1a8e87c661f)
@@ -68,5 +72,6 @@
 ![웹 앱 URL 복사](https://github.com/user-attachments/assets/b848d17c-34c6-4db9-af88-f4a64f75e9a3)
 
 6. 동기화가 완료되었습니다.
+
 ![동기화 완료](https://github.com/user-attachments/assets/7e60f1e1-9d37-436e-9ee6-e1e1fbda7929)
 **클라우드 동기화가 완료된 후에는 비밀번호를 변경하여 관리자모드 접근을 제한하세요.**
