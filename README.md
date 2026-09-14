@@ -31,12 +31,14 @@
 **주의: 교사용 데이터는 연동 전에 반드시 우측 하단의 "내보내기"로 저장하세요. 연동 후에는 모든 데이터가 더미 파일로 덮어씌워집니다.**
 
 #### Step 1: 시트 사본 만들기
-1. [구글 스프레드시트 템플릿 사본 만들기 (https://docs.google.com/spreadsheets/d/1yr9QJAsDvAs2isxLhI5Jdx0zWChv6YRa02t344xsKpQ/copy?usp=sharing)] 시트의 사본을 만듭니다.
+1. [구글 스프레드시트 템플릿 사본 만들기](https://docs.google.com/spreadsheets/d/1yr9QJAsDvAs2isxLhI5Jdx0zWChv6YRa02t344xsKpQ/copy?usp=sharing) 시트의 사본을 만듭니다.
+
 ![사본 만들기](https://github.com/user-attachments/assets/d40549ad-d52c-4d3e-9eaa-078094316533)
 
 2. 스프레드시트의 1행 A열(`A1`)에 아래 초기 JSON 문자열이 들어있는지 확인합니다:
    ```json
    {"title":"우리 반 체스리그","players":[],"matches":[]}
+
 ![JSON 문자열 확인](https://github.com/user-attachments/assets/8c2a16c7-25ea-4689-acf2-45b4449b80d7)
 3. 함께 복제된 Apps Script 파일을 엽니다.
 ![Apps Script 파일 열기](https://github.com/user-attachments/assets/795e30dc-5a9e-468a-b486-33c7f043cced)
