@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>우리 반 체스리그</title>
+    
+    <!-- React & ReactDOM (가장 안정적인 버전 지정) -->
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for in-browser JSX compilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons (하얀 화면 방지를 위한 100% 안정적 대체) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    
+    <!-- Recharts Dependencies -->
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script src="https://unpkg.com/react-is@18.2.0/umd/react-is.production.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.0/umd/Recharts.js"></script>
+
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+        const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, Legend, ResponsiveContainer } = window.Recharts;
+
+        const BASE_RATING = 1200;
+        const K_FACTOR = 32;
+
+        const formatId = (id) => String(id).padStart(6, '0');
+        const calculateExpected = (ratingA, ratingB) => 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+        const calculateEloChange = (result, expected) => Math.round(K_FACTOR * (result - expected));
+
+        const calculateCurrentStats = (basePlayers, matches) => {
+          const stats = {};
+          basePlayers.forEach(p => { stats[p.id] = { ...p, rating: BASE_RATING, wins: 0, draws: 0, losses: 0, matchCount: 0 }; });
+
+          const sortedMatches = [...matches].sort((a, b) => a.timestamp - b.timestamp);
+          sortedMatches.forEach(m => {
+            const w = stats[m.whiteId]; const b = stats[m.blackId];
+            if (!w || !b) return;
+
+            const expectedW = calculateExpected(w.rating, b.rating);
+            const changeW = calculateEloChange(m.result, expectedW);
+            
+            w.rating += changeW; b.rating += (-changeW);
+            w.matchCount++; b.matchCount++;
+
+            if (m.result === 1) { w.wins++; b.losses++; }
+            else if (m.result === 0) { w.losses++; b.wins++; }
+            else { w.draws++; b.draws++; }
+          });
+
+          const playersArr = Object.values(stats);
+          const activePlayers = playersArr.filter(p => p.matchCount > 0);
+          const inactivePlayers = playersArr.filter(p => p.matchCount === 0);
+
+          activePlayers.sort((a, b) => b.rating - a.rating || b.matchCount - a.matchCount);
+          
+          let rank = 1;
+          const rankedActive = activePlayers.map(p => ({ ...p, rank: rank++, winRate: ((p.wins + p.draws*0.5) / p.matchCount * 100).toFixed(1) }));
+          const unrankedInactive = inactivePlayers.map(p => ({ ...p, rank: '-', winRate: '0.0' }));
+
+          return [...rankedActive, ...unrankedInactive];
+        };
+
+        // 공통 아이콘 컴포넌트 (FontAwesome 기반)
+        const Icon = ({ name, size = 18, className = '' }) => (
+          <i className={`fa-solid fa-${name} ${className}`} style={{ fontSize: `${size}px` }}></i>
+        );
+
+        // 선생님께서 만드신 커스텀 SVG 체스 아이콘 (React 문법에 맞게 fillRule만 수정됨)
+        const CustomChessPiecesIcon = ({ className = "w-10 h-10" }) => (
+          <svg viewBox="0 0 512 512" className={className} xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Layered SVG from Base64 image">
+            <g id="layer-1" data-layer-id="layer-1" data-layer-name="Layer 1" data-layer-color="#ffffff" fill="#ffffff">
+              <path d="M 173.5 149.81581513927063 C 139.69001704786749 166.69462980044582, 126.4369005335249 207.47296897448908, 143.8647904573359 241 L 146.72377891080276 246.5 182.69556344164835 246.76229885792858 L 218.66734797249396 247.02459771585717 222.35719883240068 239.46121317018378 C 231.8275806263802 220.0490087148464, 231.23775121904814 196.44707902319715, 220.78913684959383 176.71546294088023 C 217.30492604425075 170.13572829569398, 203.7376284566544 155.54780967178075, 198.48957122437076 152.73837785160126 C 183.46373543576462 144.69462769399627, 183.70235837777327 144.7225349560441, 173.5 149.81581513927063 M 174.5 264.91624092096043 C 145.61960922193254 265.56467131799536, 145.13002331799777 265.6710703685503, 139.02334792264713 272.6261894051031 C 128.3899832646348 284.73692268754655, 131.8770256983204 302.4341208507984, 146.27040961970482 309.40597898127555 L 151.5 311.93908463669806 185.0620337244813 312.0857594221579 C 216.95442091193968 312.225137419538, 218.8199736866122 312.13171255126167, 222.5620337244813 310.20779991979134 C 240.5187409928621 300.9756829618482, 240.37702108126751 275.287592902163, 222.32044824890204 266.4181207987171 C 217.8342980681916 264.21450307739855, 212.79863034046502 264.0563496449594, 174.5 264.91624092096043 M 135.9816799495614 334.75 C 135.90829496529193 357.7828874346445, 127.79278528346377 385.32259527652644, 116.88496481661363 399.5540574307533 L 112 405.9274839208248 112 421.9637419604124 L 112 438 127.25 438.067493556343 C 141.19152398031991 438.12919605039366, 142.10864036059309 438.24052168573274, 137.93878954509643 439.36496933227386 C 129.7656651397323 441.5689451839626, 123.48116289397547 447.5504839549374, 120.5196178593926 455.94439706128026 C 119.31025523724952 459.37209599740584, 119 465.53411592553874, 119 486.12572652323144 L 119 512 157.5 512 L 196 512 196 483.1815012274276 C 196 451.055902284802, 196.53445874473326 447.38801996010864, 202.32107209664963 439.80126122782775 C 206.1649655921248 434.7615789872482, 216.44194239010898 429, 221.58737240651823 429 L 225 429 225.00178808402995 410.25 L 225.00357616805988 391.5 229.50178808402995 388.65817592549007 C 234.9254704481164 385.2316697041993, 234.93442717321824 386.38430247733896, 229.42154614445172 378.33191400646706 C 221.5482806272283 366.8318304479455, 216.8683565477973 354.74903760559346, 214.38558753366587 339.51154641144547 L 212.6728553398672 329 174.33642766993358 329 L 136 329 135.9816799495614 334.75" fillRule="evenodd"/>
+            </g>
+            <g id="layer-2" data-layer-id="layer-2" data-layer-name="Layer 2" data-layer-color="#e0e0e0" fill="#e0e0e0">
+              <path d="M 148.5 143.4820752341245 C 95.54804375856153 155.15864848648914, 76.1652477795831 219.20307161026685, 114.06857932146735 257.25 L 120.79310344827593 264 113.64655172413796 264.021962000491 C 83.28801536928265 264.1152565313455, 77.54829502717007 305.3910894716892, 106.95010824500262 312.1778417062104 L 111.98241645701162 313.3394377190011 111.44626413923223 320.41971885950056 C 108.3092551109465 361.84620369228037, 95.24424684867945 386.7352828361853, 69.08669497968043 401.11547106646174 L 63 404.4616488718785 63 421.1007720040942 L 63 437.73989513631 58.3871061304726 438.25983511806453 C 49.65691732139931 439.24385390073985, 40.12743123091849 448.5157332948107, 38.09208397484859 458.0062302479038 C 37.47125759604723 460.90104381784516, 36.99999999999998 473.64947632945734, 36.999999999999986 487.54922110289806 L 37 512 78 512 L 119 512 119 486.1257265232315 C 119 458.7216438070015, 119.45277813859678 455.38598423638103, 124.04867764988091 448.9316385445272 C 127.1724037989215 444.5447696926105, 132.56600532555703 440.80984803288277, 137.82055400747134 439.3949905276051 C 142.15936250742175 438.2267083131408, 141.3898853047749 438.1300739593267, 127.25 438.06749355634304 L 112 438 112 421.963741960412 L 112.00000000000001 405.92748392082393 116.88496481661309 399.554057430754 C 127.79278528346283 385.3225952765295, 135.90829496529193 357.7828874346448, 135.9816799495614 334.75 L 136 329 174.63592398188513 329 L 213.27184796377023 329 212.63592398188513 324.36042873451186 C 212.2861657918483 321.8086645384934, 212 317.98366453849343, 212 315.86042873451186 L 212 312 181.69634432360175 312 L 151.3926886472035 312 146.1947721398706 309.40976892417655 C 131.83242544998734 302.2527096167782, 128.41250108914127 284.7112763022815, 139.0233479226469 272.62618940510345 C 145.16009083087792 265.6368253632599, 145.54230261190713 265.5558056110961, 175 265 L 201.5 264.5 205.36023051010108 261.54723422738016 C 207.48335729065664 259.9232130524392, 211.25423207224551 256.0982130524392, 213.73995224696523 253.04723422738013 L 218.2594434737283 247.5 182.4913441193147 247 L 146.72324476490107 246.5 143.86452338438505 241 C 126.46672921359169 207.52773908239624, 139.8808201558939 166.15225887673168, 173.36937911482346 149.99289564260005 C 183.26493896929907 145.21795306326507, 183.23399711803395 144.73021135182634, 172.92945472281866 143.05829195578423 C 164.52090895930604 141.69399937341277, 155.93314444562026 141.84297326744831, 148.5 143.4820752341245" fillRule="evenodd"/>
+            </g>
+            <g id="layer-3" data-layer-id="layer-3" data-layer-name="Layer 3" data-layer-color="#606060" fill="#606060">
+              <path d="M 304.1273007579367 2.09602816071887 C 300.40580722285836 5.563126793527686, 300 8.267876180662771, 300 29.604937728470958 C 300 51.58855685707584, 299.17939758286764 55.65965531062346, 294.01974993135 59.273613201531866 C 292.9158850927111 60.04679023095989, 292.1944553696155 60.864026954472145, 292.4165727689155 61.08969480933686 C 292.6386901682155 61.31536266420159, 293.7837062691493 72.525, 294.961052993213 86 C 297.889302822373 119.51448272751847, 299.5112409159438 125.2720784446571, 308.84278511202893 135.27771393407482 C 314.3651130366254 141.1989633120423, 319.48781249362776 144.60778464466037, 326.3889953023027 146.95356884323746 L 331.4460877343089 148.67252744013652 324.31076993138265 149.27072683977855 C 320.3863451397732 149.59973650958165, 314.94525881717493 150.8283296117947, 312.21946699227544 152.0009337335853 C 291.6410546761251 160.85352874153838, 291.03185181491347 190.3621618240284, 311.2198136739645 200.42224764708504 L 316.39268864720356 203.00000000000006 353.6963443236018 203.00000000000003 C 374.2133549456208 203, 391 203.38408093682668, 391 203.85351319294816 C 391 205.2203411106601, 400.83434052751954 202.2871265314024, 405.58395546751177 199.50366678679165 C 423.08376083926004 189.24809777620914, 422.2296557680535 161.7987535455153, 404.1228682315905 152.54704769867405 L 399.5 150.18498225988463 402.5 149.54702429771754 C 417.5707564059715 146.34218794936066, 426.8163900628231 140.32584065510724, 433.84269082634023 129.1516117012069 C 439.0949789312364 120.79867154232583, 439.79045728499284 116.61830611714075, 444.4919632016357 65.14120821328515 C 449.94633004261965 5.420986468384406, 449.91226008863043 6.758413934784855, 446.0769230769233 2.9230769230771383 L 443.1538461538466 0 430.09269961938253 4.001414207777804e-15 C 411.03335238915247 9.840437803200837e-15, 411.8285532276835 -0.9860648713522657, 407.9961803225235 27.400123845491763 C 406.3699953793712 39.44519196051223, 404.74655920306265 50.24519196051223, 404.38854437517125 51.40012384549176 C 400.3495033673332 64.42979994065736, 382.09527430448895 67.04455742520393, 373.69729362880383 55.79637510994567 C 370.76268940860274 51.8657917272618, 370.09101457517653 46.236249319106435, 370.0435510654956 25.173076923076906 L 370 5.846153846153809 367.0769230769231 2.9230769230769047 L 364.15384615384613 0 335.2654845235552 -1.493341386885924e-17 C 307.3182050901315 -2.938034913051019e-17, 306.30383152476196 0.06828129651065229, 304.1273007579367 2.09602816071887 M 309.61159067022055 239.75 C 306.8607968180545 318.9908022264291, 298.94512068705774 373.6289953947249, 287.98629654844956 389.0192447230973 C 286.17578341828295 391.5618759518794, 286 393.45441838835654, 286 410.4043704993998 L 286 429 303.25 429.0696517246607 C 319.81730473019286 429.1365468752367, 320.3147708257145 429.1963046704278, 315.81972257940544 430.5795815757016 C 308.9585704734322 432.6909878903182, 300.65070126453156 440.6449122520205, 298.0521328808889 447.5902086087267 C 296.1531657804526 452.6656529830929, 296 455.274027490161, 296 482.5375126071103 L 296 512 385.5772372604714 512 L 475.15447452094287 512 474.8272372604714 481.75 L 474.5 451.5 471.6938496371605 445.78556119330136 C 467.16462025076936 436.5622478196572, 456.6350486263299 429.0000000000002, 448.32186116808987 429 L 446 429 446 410.5230529798543 L 446 392.0461059597086 443.25 390.30235249812915 C 422.5145128993934 377.15414253114056, 408.6833539662083 346.5268513910215, 399.534455050809 293.5 C 396.2415714149233 274.414506453434, 392 234.64431299413354, 392 222.854782539599 L 392 220 351.14859965468946 220 L 310.2971993093789 220 309.61159067022055 239.75 M 196.4405235347674 484 C 196.4405235347674 499.675, 196.57876120974774 506.0875, 196.747718368057 498.25 C 196.9166755263663 490.41249999999997, 196.9166755263663 477.5875, 196.747718368057 469.75 C 196.57876120974774 461.91249999999997, 196.4405235347674 468.325, 196.4405235347674 484" fillRule="evenodd"/>
+            </g>
+            <g id="layer-4" data-layer-id="layer-4" data-layer-name="Layer 4" data-layer-color="#404040" fill="#404040">
+              <path d="M 226.5 1.2078167031419762 C 221.59338725465636 4.021757472169897, 220.7646563708575 7.561343624182705, 222.06916339926175 20.132329087563924 C 222.6038156681198 25.284548089403767, 223.94127634480034 39.625, 225.04129823632962 52 C 229.94687742188344 107.18666754607315, 230.93421911952248 115.80542571860278, 232.9620459103648 121.14223202704416 C 238.41583099181668 135.49542765451028, 248.9929206410455 144.71514614941688, 264.46376705300827 148.6012978638735 L 271.2047086778405 150.29456797688667 268.2076950603358 151.5547176256835 C 243.91654043176092 161.7683815861279, 249.0092904975093 198.47418130463979, 275.40335511524916 203.41716000127224 L 279.30671023049837 204.1481653033923 278.6198212627492 221.82408265169613 C 278.2420323304872 231.54583719326325, 277.7474160432005 241.3, 277.52067395766767 243.5 C 277.2939318721348 245.7, 276.6066371558133 252.45, 275.99335236584204 258.5 C 269.00707717802203 327.4189844220504, 252.4568872757779 373.94363118259656, 229.25 389.9013899580482 L 226.00000000000003 392.1361884212764 226 410.48523012376694 L 225.99999999999997 428.83427182625746 220.95002912562282 429.91729671032635 C 211.62737663947564 431.91664777178545, 203.9924135274544 437.50625015232146, 199.665265612476 445.5 C 197.59755196080772 449.3197875396983, 197.48636473267052 450.90790984610686, 197.19735128621767 480.75 L 196.89470257243534 512 246.44735128621767 512 L 296 512 296 482.5375126071102 C 296.00000000000006 455.27402749016375, 296.1531657804528 452.66565298309234, 298.0521328808884 447.5902086087277 C 300.6507012645316 440.6449122520195, 308.9585704734373 432.69098789031216, 315.8197225794068 430.5795815757004 C 320.3147708257114 429.19630467043044, 319.8173047301812 429.1365468752384, 303.25 429.0696517246615 L 286 429 286 410.4043704993999 C 286 393.4544183883557, 286.17578341828283 391.5618759518796, 287.98629654844984 389.019244723097 C 298.9451206870576 373.62899539472573, 306.86079681805364 318.99080222643465, 309.6115906702206 239.75 L 310.2971993093791 220 351.1485996546895 220 L 392 220 392 213.08178746823955 C 392 201.9479994535951, 396.00802130660185 203, 353.589355519419 203.00000000000003 L 316.39268864720356 203.00000000000006 311.2198136739648 200.4222476470851 C 291.0318518149136 190.36216182402796, 291.64105467612484 160.85352874153958, 312.2194669922751 152.00093373358558 C 314.9452588171746 150.82832961179486, 320.386345139773 149.59973650958165, 324.3107699313827 149.2707268397785 L 331.4460877343094 148.67252744013638 326.38899530230344 146.95356884323743 C 319.48781249362844 144.60778464466043, 314.36511303662485 141.19896331204168, 308.84278511202893 135.27771393407488 C 299.51124091594386 125.27207844465721, 297.889302822373 119.51448272751851, 294.96105299321295 86 C 293.78370626914926 72.525, 292.6377292509732 61.31440174695928, 292.41443739726617 61.087559437687275 C 292.1911455435592 60.86071712841528, 290.860376602242 61.19821712841528, 289.45717308322816 61.837559437687275 C 283.2632322750479 64.65970773345194, 274.1818401135897 62.3816814670082, 269.5146780514589 56.83507450001451 C 266.3127782072629 53.029832739173536, 265.533329663748 49.81113008825777, 263.01623380150653 30 C 259.9271010677621 5.686579376596367, 259.9521393015318 5.798293147685718, 256.91014555817947 2.756299404333308 C 254.18442716246057 0.03058100861438806, 254.0115320625342 0.0003373828997045025, 241.3269230769231 0.030408685900747804 C 233.56511610412852 0.048809540793420016, 227.71023676937128 0.5137463205257227, 226.5 1.2078167031419762" fillRule="evenodd"/>
+            </g>
+          </svg>
+        );
+
+        const FilterPlayerSelector = ({ label, players, selectedId, onSelect }) => {
+          const [selectedGrade, setSelectedGrade] = useState('');
+          const [selectedClass, setSelectedClass] = useState('');
+
+          const grades = [...new Set(players.map(p => p.grade))].sort((a, b) => Number(a) - Number(b));
+          const classes = selectedGrade ? [...new Set(players.filter(p => p.grade === selectedGrade).map(p => p.classNum))].sort((a, b) => Number(a) - Number(b)) : [];
+          const availablePlayers = selectedClass ? players.filter(p => p.grade === selectedGrade && p.classNum === selectedClass) : [];
+
+          useEffect(() => {
+            if (!selectedId) { setSelectedGrade(''); setSelectedClass(''); }
+          }, [selectedId]);
+
+          return (
+            <div className="flex flex-col gap-1.5 w-full">
+              <span className="text-xs font-bold text-gray-600">{label} 선수</span>
+              <div className="flex gap-2">
+                <select className="border border-gray-300 rounded-md p-1.5 text-sm outline-none bg-white flex-1" value={selectedGrade} onChange={(e) => { setSelectedGrade(e.target.value); setSelectedClass(''); onSelect(''); }}>
+                  <option value="">전체 학년</option>
+                  {grades.map(g => <option key={g} value={g}>{g}학년</option>)}
+                </select>
+                <select className="border border-gray-300 rounded-md p-1.5 text-sm outline-none bg-white flex-1 disabled:bg-gray-100 disabled:text-gray-400" value={selectedClass} onChange={(e) => { setSelectedClass(e.target.value); onSelect(''); }} disabled={!selectedGrade}>
+                  <option value="">전체 반</option>
+                  {classes.map(c => <option key={c} value={c}>{c}반</option>)}
+                </select>
+                <select className="border border-gray-300 rounded-md p-1.5 text-sm outline-none bg-white flex-1 disabled:bg-gray-100 disabled:text-gray-400" value={selectedId} onChange={(e) => onSelect(e.target.value)} disabled={!selectedClass}>
+                  <option value="">전체 이름</option>
+                  {availablePlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            </div>
+          );
+        };
+
+        const PlayerSelector = ({ label, players, selectedId, onSelect }) => {
+          const [selectedGrade, setSelectedGrade] = useState('');
+          const [selectedClass, setSelectedClass] = useState('');
+          
+          const selectedPlayer = players.find(p => p.id === selectedId);
+          const grades = [...new Set(players.map(p => p.grade))].sort((a, b) => Number(a) - Number(b));
+          const classes = [...new Set(players.filter(p => p.grade === selectedGrade).map(p => p.classNum))].sort((a, b) => Number(a) - Number(b));
+          const availablePlayers = players.filter(p => p.grade === selectedGrade && p.classNum === selectedClass);
+
+          useEffect(() => {
+            if (!selectedId) { setSelectedGrade(''); setSelectedClass(''); } 
+            else if (selectedPlayer) { setSelectedGrade(selectedPlayer.grade); setSelectedClass(selectedPlayer.classNum); }
+          }, [selectedId, selectedPlayer]);
+
+          return (
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-sm">
+              <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                <div className={`w-4 h-4 rounded-full shadow-inner ${label === '백' ? 'bg-white border border-gray-300' : 'bg-gray-800'}`}></div>
+                {label} 선수 선택
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select className="border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={selectedGrade} onChange={(e) => { setSelectedGrade(e.target.value); setSelectedClass(''); onSelect(''); }}>
+                  <option value="">학년</option>
+                  {grades.map(g => <option key={g} value={g}>{g}학년</option>)}
+                </select>
+                <select className="border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-400" value={selectedClass} onChange={(e) => { setSelectedClass(e.target.value); onSelect(''); }} disabled={!selectedGrade}>
+                  <option value="">반</option>
+                  {classes.map(c => <option key={c} value={c}>{c}반</option>)}
+                </select>
+                <select className="border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white disabled:bg-gray-100 disabled:text-gray-400" value={selectedId} onChange={(e) => onSelect(e.target.value)} disabled={!selectedClass}>
+                  <option value="">이름 (선택)</option>
+                  {availablePlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              {selectedPlayer && (
+                <div className="mt-3 text-sm text-blue-900 bg-blue-50 border border-blue-100 p-2.5 rounded-md flex justify-between items-center">
+                  <span className="font-medium">{selectedPlayer.grade}학년 {selectedPlayer.classNum}반 {selectedPlayer.name}</span>
+                  <span className="font-bold font-mono bg-white px-2 py-1 rounded shadow-sm text-blue-700">ELO: {selectedPlayer.rating}</span>
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const CustomBarTooltip = ({ active, payload, label }) => {
+          if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+              <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100 text-sm min-w-[150px]">
+                <p className="font-extrabold text-gray-800 mb-3 border-b border-gray-100 pb-2">{data.rawName} 전적</p>
+                {payload.map(entry => (
+                  <div key={entry.name} className="flex justify-between items-center gap-4 mb-1.5">
+                    <span style={{ color: entry.color }} className="font-bold flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: entry.color }}></span>
+                      {entry.name}
+                    </span>
+                    <span className="font-bold text-gray-700">{entry.value}건</span>
+                  </div>
+                ))}
+                <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center gap-4">
+                  <span className="font-bold text-blue-800">승률</span>
+                  <span className="font-black text-blue-700 text-base">{data.승률}%</span>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        };
+
+        function App() {
+          const [activeTab, setActiveTab] = useState('dashboard');
+          
+          const [basePlayers, setBasePlayers] = useState(() => JSON.parse(localStorage.getItem('chess_players') || '[]'));
+          const [matches, setMatches] = useState(() => JSON.parse(localStorage.getItem('chess_matches') || '[]'));
+          const [leagueTitle, setLeagueTitle] = useState(() => localStorage.getItem('chess_title') || '우리 반 체스리그');
+          
+          const [isAdmin, setIsAdmin] = useState(false);
+          const [adminPassword, setAdminPassword] = useState(() => localStorage.getItem('chess_admin_pwd') || '1234');
+          const [isPwdModalOpen, setIsPwdModalOpen] = useState(false);
+          const [newPwdInput, setNewPwdInput] = useState('');
+          
+          const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+          const [loginPwdInput, setLoginPwdInput] = useState('');
+          
+          const [syncUrl, setSyncUrl] = useState(() => localStorage.getItem('chess_sync_url') || '');
+          const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+          const [tempSyncUrl, setTempSyncUrl] = useState(() => localStorage.getItem('chess_sync_url') || '');
+          const [isSyncing, setIsSyncing] = useState(false);
+
+          const [isEditingTitle, setIsEditingTitle] = useState(false);
+          const [tempTitle, setTempTitle] = useState('');
+          const allMatchTypes = ['자유', '스탠다드', '래피드', '블리츠', '불렛'];
+          const [showFilter, setShowFilter] = useState(false);
+          const [filter, setFilter] = useState({ period: '전체 기간', startDate: '', endDate: '', types: allMatchTypes, whiteId: '', blackId: '' });
+          const [infoTabPlayerId, setInfoTabPlayerId] = useState('');
+          const [infoPeriod, setInfoPeriod] = useState('1년');
+          const [toast, setToast] = useState(null);
+          const [confirmModal, setConfirmModal] = useState({ isOpen: false, message: '', onConfirm: null });
+          
+          const gradeInputRef = useRef(null);
+          const fileInputRef = useRef(null);
+
+          const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+          const showConfirm = (message, onConfirm) => { setConfirmModal({ isOpen: true, message, onConfirm }); };
+
+          // 앱 시작 시 클라우드 동기화 (캐시 방지 적용)
+          useEffect(() => {
+            const savedUrl = localStorage.getItem('chess_sync_url');
+            if (!savedUrl) return;
+
+            const loadCloudData = async () => {
+              try {
+                const res = await fetch(savedUrl, { method: 'GET', cache: 'no-store' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                
+                const isCloudEmpty = !data.players || data.players.length === 0;
+                const localPlayers = JSON.parse(localStorage.getItem('chess_players') || '[]');
+                const isLocalEmpty = localPlayers.length === 0;
+
+                // [핵심 방어] 클라우드가 비어있는데 로컬에 데이터가 있으면 덮어쓰지 않고 보존
+                if (isCloudEmpty && !isLocalEmpty) {
+                  return;
+                }
+                
+                if (data.players) setBasePlayers(data.players);
+                if (data.matches) setMatches(data.matches);
+                if (data.title) setLeagueTitle(data.title);
+                
+              } catch (err) {
+                console.error('클라우드 자동 동기화 실패:', err);
+              }
+            };
+            loadCloudData();
+          }, []);
+
+          // 데이터 변경 시 로컬 저장 및 관리자 모드일 경우 클라우드에 자동 푸시
+          useEffect(() => {
+            localStorage.setItem('chess_players', JSON.stringify(basePlayers));
+            localStorage.setItem('chess_matches', JSON.stringify(matches));
+            localStorage.setItem('chess_title', leagueTitle);
+
+            if (isAdmin && syncUrl) {
+              setIsSyncing(true);
+              fetch(syncUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ title: leagueTitle, players: basePlayers, matches: matches })
+              })
+              .then(() => setIsSyncing(false))
+              .catch(err => { console.error("Cloud sync failed:", err); setIsSyncing(false); });
+            }
+          }, [basePlayers, matches, leagueTitle, syncUrl, isAdmin]);
+
+          // 클라우드 동기화 수동 설정 버튼 핸들러
+          const handleSaveSyncUrl = async () => {
+            setSyncUrl(tempSyncUrl);
+            localStorage.setItem('chess_sync_url', tempSyncUrl);
+            setIsSyncModalOpen(false);
+            
+            if (tempSyncUrl) {
+              try {
+                showToast('클라우드 상태 확인 중...');
+                const res = await fetch(tempSyncUrl, { method: 'GET', cache: 'no-store' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                
+                const isCloudEmpty = !data.players || data.players.length === 0;
+                const isLocalEmpty = basePlayers.length === 0;
+
+                // 클라우드가 비어있고 로컬에 데이터가 있으면 -> 로컬 데이터를 클라우드로 밀어넣기
+                if (isCloudEmpty && !isLocalEmpty) {
+                  setIsSyncing(true);
+                  await fetch(tempSyncUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ title: leagueTitle, players: basePlayers, matches: matches })
+                  });
+                  setIsSyncing(false);
+                  showToast('로컬 데이터를 클라우드에 성공적으로 백업했습니다!');
+                } else {
+                  // 그 외의 경우 (클라우드에 데이터가 있거나 둘 다 비어있을 때) -> 클라우드 데이터를 로컬에 덮어쓰기
+                  if (data.players) setBasePlayers(data.players);
+                  if (data.matches) setMatches(data.matches);
+                  if (data.title) setLeagueTitle(data.title);
+                  showToast('클라우드 데이터를 로컬에 동기화했습니다!');
+                }
+              } catch (err) {
+                setIsSyncing(false);
+                showToast('동기화 주소가 잘못되었거나 접근할 수 없습니다.', 'error');
+              }
+            }
+          };
+
+          const handleToggleAdmin = () => {
+            if (isAdmin) {
+              setIsAdmin(false);
+              if (activeTab === 'addMatch' || activeTab === 'players') setActiveTab('dashboard');
+              showToast('읽기 전용 뷰어 모드로 전환되었습니다.');
+            } else {
+              setIsLoginModalOpen(true);
+            }
+          };
+
+          const handleLoginSubmit = () => {
+            if (loginPwdInput === adminPassword) {
+              setIsAdmin(true);
+              setIsLoginModalOpen(false);
+              setLoginPwdInput('');
+              showToast('관리자 모드가 활성화되었습니다. 모든 편집이 가능합니다.');
+            } else {
+              showToast('비밀번호가 틀렸습니다.', 'error');
+              setLoginPwdInput('');
+            }
+          };
+
+          const handleChangePassword = () => {
+            if (newPwdInput.trim().length < 4) return showToast('비밀번호는 최소 4자리 이상이어야 합니다.', 'error');
+            setAdminPassword(newPwdInput.trim());
+            localStorage.setItem('chess_admin_pwd', newPwdInput.trim());
+            setIsPwdModalOpen(false);
+            setNewPwdInput('');
+            showToast('관리자 비밀번호가 성공적으로 변경되었습니다.');
+          };
+
+          const handleExport = () => {
+            const backupData = { title: leagueTitle, players: basePlayers, matches: matches, exportDate: new Date().toISOString() };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `체스리그_백업.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            showToast('리그 데이터를 내보냈습니다.');
+          };
+
+          const handleImport = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              try {
+                const data = JSON.parse(event.target.result);
+                if (!data.players || !data.matches) return showToast('유효하지 않은 백업 파일입니다.', 'error');
+                showConfirm('경고: 기존의 모든 데이터가 백업 파일로 덮어씌워집니다. 계속하시겠습니까?', () => {
+                  setBasePlayers(data.players);
+                  setMatches(data.matches);
+                  if (data.title) setLeagueTitle(data.title);
+                  showToast('데이터 불러오기가 완료되었습니다.');
+                });
+              } catch (err) { showToast('오류가 발생했습니다.', 'error'); }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+          };
+
+          const handleSaveTitle = () => {
+            if (!tempTitle.trim()) return setIsEditingTitle(false);
+            setLeagueTitle(tempTitle.trim());
+            setIsEditingTitle(false);
+            showToast('리그 이름이 변경되었습니다.');
+          };
+
+          const currentPlayers = useMemo(() => calculateCurrentStats(basePlayers, matches), [basePlayers, matches]);
+
+          const filteredMatches = useMemo(() => {
+            return matches.filter(match => {
+              let isDateValid = true;
+              const matchDate = new Date(match.date).getTime();
+              const today = new Date(); today.setHours(23, 59, 59, 999);
+              const todayTime = today.getTime();
+              const dayMs = 24 * 60 * 60 * 1000;
+              
+              if (filter.period !== '전체 기간') {
+                let startLimit = 0;
+                if (filter.period === '1주일') startLimit = todayTime - 7 * dayMs;
+                else if (filter.period === '1개월') { const d = new Date(today); d.setMonth(d.getMonth() - 1); startLimit = d.getTime(); }
+                else if (filter.period === '3개월') { const d = new Date(today); d.setMonth(d.getMonth() - 3); startLimit = d.getTime(); }
+                else if (filter.period === '6개월') { const d = new Date(today); d.setMonth(d.getMonth() - 6); startLimit = d.getTime(); }
+                else if (filter.period === '1년') { const d = new Date(today); d.setFullYear(d.getFullYear() - 1); startLimit = d.getTime(); }
+                else if (filter.period === '직접 설정') {
+                  const sDate = filter.startDate ? new Date(filter.startDate).getTime() : 0;
+                  const eDateObj = filter.endDate ? new Date(filter.endDate) : new Date(8640000000000000);
+                  if (filter.endDate) eDateObj.setHours(23, 59, 59, 999);
+                  if (matchDate < sDate || matchDate > eDateObj.getTime()) isDateValid = false;
+                }
+                if (filter.period !== '직접 설정' && matchDate < startLimit) isDateValid = false;
+              }
+              return isDateValid && filter.types.includes(match.type) && (filter.whiteId ? match.whiteId === filter.whiteId : true) && (filter.blackId ? match.blackId === filter.blackId : true);
+            });
+          }, [matches, filter]);
+
+          const resetFilter = () => setFilter({ period: '전체 기간', startDate: '', endDate: '', types: allMatchTypes, whiteId: '', blackId: '' });
+
+          const selectedPlayerInfo = useMemo(() => {
+            if (!infoTabPlayerId) return null;
+            const player = currentPlayers.find(p => p.id === infoTabPlayerId);
+            if (!player) return null;
+
+            let startLimit = 0;
+            const today = new Date(); today.setHours(23, 59, 59, 999);
+            const dayMs = 24 * 60 * 60 * 1000;
+            
+            if (infoPeriod === '1주일') startLimit = today.getTime() - 7 * dayMs;
+            else if (infoPeriod === '1개월') { const d = new Date(today); d.setMonth(d.getMonth() - 1); startLimit = d.getTime(); }
+            else if (infoPeriod === '3개월') { const d = new Date(today); d.setMonth(d.getMonth() - 3); startLimit = d.getTime(); }
+            else if (infoPeriod === '6개월') { const d = new Date(today); d.setMonth(d.getMonth() - 6); startLimit = d.getTime(); }
+            else if (infoPeriod === '1년') { const d = new Date(today); d.setFullYear(d.getFullYear() - 1); startLimit = d.getTime(); }
+
+            const allPlayerMatches = matches.filter(m => m.whiteId === infoTabPlayerId || m.blackId === infoTabPlayerId).sort((a,b) => a.timestamp - b.timestamp);
+            const fullHistory = allPlayerMatches.length > 0 ? [{ date: '초기', rating: 1200, timestamp: player.createdAt || 0 }] : [];
+
+            allPlayerMatches.forEach(m => {
+                const isWhite = m.whiteId === infoTabPlayerId;
+                fullHistory.push({ date: m.date, rating: isWhite ? m.log.whiteRatingBefore + m.log.whiteChange : m.log.blackRatingBefore + m.log.blackChange, timestamp: m.timestamp });
+            });
+
+            let chartHistory = fullHistory;
+            if (infoPeriod !== '전체 기간') {
+                const beforePeriod = fullHistory.filter(h => h.timestamp < startLimit);
+                const withinPeriod = fullHistory.filter(h => h.timestamp >= startLimit);
+                chartHistory = [];
+                if (beforePeriod.length > 0 && withinPeriod.length > 0) chartHistory.push({ date: '시작점', rating: beforePeriod[beforePeriod.length - 1].rating });
+                else if (withinPeriod.length > 0) chartHistory.push({ date: '초기', rating: 1200 }); 
+                chartHistory = [...chartHistory, ...withinPeriod];
+            }
+
+            const minRating = chartHistory.length > 0 ? Math.min(...chartHistory.map(h => h.rating)) : 1200;
+            const maxRating = chartHistory.length > 0 ? Math.max(...chartHistory.map(h => h.rating)) : 1200;
+
+            const periodMatches = allPlayerMatches.filter(m => m.timestamp >= startLimit);
+            const stats = { total: { w: 0, d: 0, l: 0 }, white: { w: 0, d: 0, l: 0 }, black: { w: 0, d: 0, l: 0 } };
+
+            periodMatches.forEach(m => {
+                const isWhite = m.whiteId === infoTabPlayerId;
+                const res = m.result; 
+                if (isWhite) { if (res === 1) { stats.total.w++; stats.white.w++; } else if (res === 0) { stats.total.l++; stats.white.l++; } else { stats.total.d++; stats.white.d++; } } 
+                else { if (res === 0) { stats.total.w++; stats.black.w++; } else if (res === 1) { stats.total.l++; stats.black.l++; } else { stats.total.d++; stats.black.d++; } }
+            });
+
+            const calcWinRate = (s) => (s.w + s.d + s.l) > 0 ? ((s.w + s.d * 0.5) / (s.w + s.d + s.l) * 100).toFixed(1) : '0.0';
+
+            return { 
+              player, chartHistory, stats, periodMatchesCount: periodMatches.length, yDomain: [Math.max(0, minRating - 50), maxRating + 50],
+              barData: [
+                { rawName: '전체', name: `전체 (${calcWinRate(stats.total)}%)`, 승리: stats.total.w, 무승부: stats.total.d, 패배: stats.total.l, 승률: calcWinRate(stats.total) },
+                { rawName: '백', name: `백 (${calcWinRate(stats.white)}%)`, 승리: stats.white.w, 무승부: stats.white.d, 패배: stats.white.l, 승률: calcWinRate(stats.white) },
+                { rawName: '흑', name: `흑 (${calcWinRate(stats.black)}%)`, 승리: stats.black.w, 무승부: stats.black.d, 패배: stats.black.l, 승률: calcWinRate(stats.black) }
+              ]
+            };
+          }, [infoTabPlayerId, currentPlayers, matches, infoPeriod]);
+
+          const [newPlayer, setNewPlayer] = useState({ grade: '', classNum: '', name: '' });
+          
+          const handleAddPlayer = (e) => {
+            e.preventDefault();
+            if (!newPlayer.grade || !newPlayer.classNum || !newPlayer.name) return showToast('모든 정보를 입력해주세요.', 'error');
+            
+            const newId = formatId(basePlayers.length > 0 ? Math.max(...basePlayers.map(p => parseInt(p.id, 10))) + 1 : 1);
+            setBasePlayers([...basePlayers, { id: newId, grade: newPlayer.grade, classNum: newPlayer.classNum, name: newPlayer.name.trim(), createdAt: Date.now() }]);
+            setNewPlayer({ grade: '', classNum: '', name: '' });
+            showToast(`선수 등록 완료: ${newPlayer.name} (${newId})`);
+            if (gradeInputRef.current) gradeInputRef.current.focus();
+          };
+
+          const handleDeletePlayer = (id, name) => {
+            if (matches.some(m => m.whiteId === id || m.blackId === id)) return showToast('경기 기록이 있는 선수는 삭제할 수 없습니다.', 'error');
+            showConfirm(`${name} 선수를 정말 삭제하시겠습니까?`, () => {
+              setBasePlayers(basePlayers.filter(p => p.id !== id));
+              showToast(`${name} 선수가 삭제되었습니다.`);
+            });
+          };
+
+          const [matchForm, setMatchForm] = useState({ date: new Date().toISOString().split('T')[0], type: '자유', whiteId: '', blackId: '', result: '1' });
+
+          const handleAddMatch = () => {
+            const { date, type, whiteId, blackId, result } = matchForm;
+            if (!whiteId || !blackId) return showToast('백 선수와 흑 선수를 모두 선택해주세요.', 'error');
+            if (whiteId === blackId) return showToast('백과 흑은 동일한 선수일 수 없습니다.', 'error');
+
+            const numRes = parseFloat(result);
+            const wPlayer = currentPlayers.find(p => p.id === whiteId);
+            const bPlayer = currentPlayers.find(p => p.id === blackId);
+            const expectedW = calculateExpected(wPlayer.rating, bPlayer.rating);
+            const changeW = calculateEloChange(numRes, expectedW);
+
+            setMatches([...matches, { id: `match_${Date.now()}`, timestamp: Date.now(), date, type, whiteId, blackId, result: numRes, log: { whiteRatingBefore: wPlayer.rating, blackRatingBefore: bPlayer.rating, whiteChange: changeW, blackChange: -changeW } }]);
+            setMatchForm(prev => ({ ...prev, whiteId: '', blackId: '', result: '1' }));
+            showToast('경기 기록이 추가되었습니다.');
+          };
+
+          const handleUndoLastMatch = () => {
+            if (matches.length === 0) return showToast('삭제할 경기 기록이 없습니다.', 'error');
+            showConfirm('가장 마지막 경기 기록을 취소하시겠습니까?', () => {
+              const sortedMatches = [...matches].sort((a, b) => b.timestamp - a.timestamp);
+              setMatches(matches.filter(m => m.id !== sortedMatches[0].id));
+              showToast('마지막 경기 기록이 삭제되었습니다.');
+            });
+          };
+
+          return (
+            <div className="min-h-screen bg-[#f3f4f6] text-gray-800 font-sans p-4 md:p-8 relative">
+              
+              {/* 모드 전환 및 비밀번호 변경 버튼 (우측 상단 전체 화면 기준) */}
+              <div className="absolute top-4 right-4 md:top-6 md:right-8 flex gap-2 z-40">
+                {isAdmin && (
+                  <button onClick={() => setIsPwdModalOpen(true)} className="bg-white text-gray-400 hover:text-blue-600 p-2.5 rounded-full shadow-sm hover:bg-gray-50 transition-colors border border-gray-200" title="비밀번호 변경">
+                    <Icon name="key" size={18} />
+                  </button>
+                )}
+                <button onClick={handleToggleAdmin} className={`shadow-sm p-2.5 rounded-full transition-colors flex items-center gap-1.5 px-4 font-bold text-sm border ${isAdmin ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-white text-gray-500 hover:bg-gray-100 border-gray-200'}`}>
+                  {isAdmin ? <Icon name="unlock" size={16} /> : <Icon name="lock" size={16} />}
+                  {isAdmin ? '관리자 모드' : '뷰어 모드'}
+                </button>
+              </div>
+
+              {/* 토스트 알림 */}
+              {toast && (
+                <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 p-4 rounded-lg shadow-xl flex items-center gap-3 z-50 text-white transition-all ${toast.type === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+                  {toast.type === 'error' ? <Icon name="circle-exclamation" size={20} /> : <Icon name="circle-check" size={20} />}
+                  <span className="font-medium">{toast.msg}</span>
+                </div>
+              )}
+
+              {/* 확인 모달 */}
+              {confirmModal.isOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                    <h3 className="text-lg font-bold text-gray-900 mb-6">{confirmModal.message}</h3>
+                    <div className="flex gap-3 justify-end">
+                      <button onClick={() => setConfirmModal({ isOpen: false, message: '', onConfirm: null })} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold">취소</button>
+                      <button onClick={() => { confirmModal.onConfirm(); setConfirmModal({ isOpen: false, message: '', onConfirm: null }); }} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold">확인</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 로그인 모달 */}
+              {isLoginModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2"><Icon name="lock" className="text-blue-600"/> 관리자 모드 접속</h3>
+                    <p className="text-sm text-gray-500 mb-4">편집 권한을 얻으려면 비밀번호를 입력하세요. (초기: 1234)</p>
+                    <input type="password" placeholder="비밀번호 입력" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 mb-4" value={loginPwdInput} onChange={e => setLoginPwdInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLoginSubmit()} autoFocus />
+                    <div className="flex gap-3 justify-end">
+                      <button onClick={() => { setIsLoginModalOpen(false); setLoginPwdInput(''); }} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold">취소</button>
+                      <button onClick={handleLoginSubmit} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">로그인</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 클라우드 동기화 모달 */}
+              {isSyncModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2"><Icon name="cloud" className="text-blue-600"/> 클라우드 동기화 설정</h3>
+                    <p className="text-sm text-gray-500 mb-4">Google Apps Script로 생성한 웹 앱 URL을 입력하면 실시간으로 데이터가 동기화되어 여러 명이 함께 접근할 수 있습니다.</p>
+                    <input type="text" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 mb-4" placeholder="https://script.google.com/macros/s/..." value={tempSyncUrl} onChange={e => setTempSyncUrl(e.target.value)} />
+                    <div className="flex gap-3 justify-end">
+                      <button onClick={() => setIsSyncModalOpen(false)} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold">취소</button>
+                      <button onClick={handleSaveSyncUrl} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">저장 및 동기화</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 비밀번호 변경 모달 */}
+              {isPwdModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2"><Icon name="key" className="text-blue-600"/> 관리자 비밀번호 변경</h3>
+                    <p className="text-sm text-gray-500 mb-4">현재 기기에 새로운 비밀번호를 저장합니다.</p>
+                    <input type="password" placeholder="새 비밀번호 입력 (4자리 이상)" className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 mb-4" value={newPwdInput} onChange={e => setNewPwdInput(e.target.value)} />
+                    <div className="flex gap-3 justify-end">
+                      <button onClick={() => setIsPwdModalOpen(false)} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold">취소</button>
+                      <button onClick={handleChangePassword} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">비밀번호 변경</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="max-w-6xl mx-auto mt-12 md:mt-8">
+                <header className="mb-8 text-center md:text-left bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center justify-center md:justify-start gap-3 mt-4 md:mt-0">
+                      <CustomChessPiecesIcon className="w-12 h-12" />
+                      {isEditingTitle && isAdmin ? (
+                        <div className="flex items-center gap-2">
+                          <input type="text" value={tempTitle} onChange={(e) => setTempTitle(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') handleSaveTitle(); if(e.key === 'Escape') setIsEditingTitle(false); }} className="text-2xl sm:text-3xl font-extrabold text-gray-900 border-b-2 border-blue-500 outline-none bg-transparent max-w-[180px] sm:max-w-xs" autoFocus />
+                          <button onClick={handleSaveTitle} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold shadow-sm hover:bg-blue-700">저장</button>
+                          <button onClick={() => setIsEditingTitle(false)} className="text-sm bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg font-bold shadow-sm hover:bg-gray-300">취소</button>
+                        </div>
+                      ) : (
+                        <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-2 group">
+                          {leagueTitle}
+                          {isAdmin && (
+                            <button onClick={() => { setTempTitle(leagueTitle); setIsEditingTitle(true); }} className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-600 p-1.5 rounded-full hover:bg-blue-50">
+                              <Icon name="pencil" size={18} />
+                            </button>
+                          )}
+                        </h1>
+                      )}
+                    </div>
+                    
+                    <p className="text-gray-500 mt-2 font-medium flex items-center justify-center md:justify-start">
+                      Elo 레이팅 관리 시스템
+                      {syncUrl && (
+                        <span className={`text-sm ml-2 font-bold ${isSyncing ? 'text-orange-500 animate-pulse' : 'text-blue-500'}`}>
+                          {isSyncing ? '☁️ 클라우드 저장 중...' : '☁️ 클라우드 연결됨'}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-4 text-sm bg-gray-50 p-3 rounded-lg border border-gray-200 mt-2 md:mt-0">
+                    <div className="text-center px-4 border-r border-gray-200">
+                      <div className="text-gray-500 mb-1">등록 선수</div>
+                      <div className="font-bold text-xl text-blue-600">{basePlayers.length}명</div>
+                    </div>
+                    <div className="text-center px-4">
+                      <div className="text-gray-500 mb-1">누적 경기</div>
+                      <div className="font-bold text-xl text-green-600">{matches.length}건</div>
+                    </div>
+                  </div>
+                </header>
+
+                <nav className="flex flex-wrap gap-2 mb-6">
+                  <button onClick={() => setActiveTab('dashboard')} className={`px-5 py-3 rounded-t-xl font-bold flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}><Icon name="trophy" size={18} /> 대시보드</button>
+                  <button onClick={() => setActiveTab('playerInfo')} className={`px-5 py-3 rounded-t-xl font-bold flex items-center gap-2 ${activeTab === 'playerInfo' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}><Icon name="user" size={18} /> 선수 정보</button>
+                  <button onClick={() => setActiveTab('history')} className={`px-5 py-3 rounded-t-xl font-bold flex items-center gap-2 ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}><Icon name="clock-rotate-left" size={18} /> 전체 경기 내역</button>
+                  
+                  {isAdmin && (
+                    <>
+                      <button onClick={() => setActiveTab('addMatch')} className={`px-5 py-3 rounded-t-xl font-bold flex items-center gap-2 ${activeTab === 'addMatch' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}><Icon name="chess-knight" size={18} /> 경기 기록 추가</button>
+                      <button onClick={() => setActiveTab('players')} className={`px-5 py-3 rounded-t-xl font-bold flex items-center gap-2 ${activeTab === 'players' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}><Icon name="users" size={18} /> 선수 등록·관리</button>
+                    </>
+                  )}
+                </nav>
+
+                <main className="bg-white rounded-xl shadow-md border border-gray-200 p-6 min-h-[500px]">
+                  {activeTab === 'dashboard' && (
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-800 mb-4">🏆 실시간 순위표</h2>
+                      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+                        <table className="min-w-full divide-y divide-gray-200 text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-4 text-left font-bold text-gray-600">순위</th><th className="px-6 py-4 text-left font-bold text-gray-600">소속</th><th className="px-6 py-4 text-left font-bold text-gray-600">이름</th><th className="px-6 py-4 text-left font-bold text-blue-700">ELO 레이팅</th><th className="px-6 py-4 text-center font-bold text-gray-600">전적 (승/무/패)</th><th className="px-6 py-4 text-right font-bold text-gray-600">승률</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {currentPlayers.filter(p => p.matchCount > 0).length === 0 ? (
+                              <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-400">경기를 한 번 이상 치른 선수만 순위표에 나타납니다.</td></tr>
+                            ) : currentPlayers.filter(p => p.matchCount > 0).map(player => (
+                              <tr key={player.id} className="hover:bg-blue-50">
+                                <td className="px-6 py-4"><span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold shadow-sm ${player.rank === 1 ? 'bg-yellow-400 text-white' : player.rank === 2 ? 'bg-gray-300 text-gray-800' : player.rank === 3 ? 'bg-orange-400 text-white' : 'bg-gray-100 text-gray-500'}`}>{player.rank}</span></td>
+                                <td className="px-6 py-4 font-medium text-gray-600">{player.grade}학년 {player.classNum}반</td>
+                                <td className="px-6 py-4 font-bold text-gray-900">{player.name}</td>
+                                <td className="px-6 py-4 font-extrabold text-blue-700 font-mono text-lg">{player.rating}</td>
+                                <td className="px-6 py-4 text-center font-medium"><span className="text-gray-900">{player.matchCount}전</span> <span className="text-green-600">{player.wins}승</span> <span className="text-gray-500">{player.draws}무</span> <span className="text-red-500">{player.losses}패</span></td>
+                                <td className="px-6 py-4 text-right font-bold text-gray-600">{player.winRate}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'addMatch' && isAdmin && (
+                    <div className="max-w-3xl mx-auto">
+                      <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2"><Icon name="chess-knight" size={24} className="text-blue-600" /> 경기 결과 입력</h2>
+                      <div className="bg-white rounded-xl p-6 md:p-8 border border-gray-200 shadow-sm space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                          <div><label className="block text-sm font-bold text-gray-700 mb-2">경기 일자</label><input type="date" className="w-full border border-gray-300 rounded-lg p-3 outline-none" value={matchForm.date} onChange={(e) => setMatchForm({...matchForm, date: e.target.value})} /></div>
+                          <div><label className="block text-sm font-bold text-gray-700 mb-2">경기 유형</label><select className="w-full border border-gray-300 rounded-lg p-3 outline-none" value={matchForm.type} onChange={(e) => setMatchForm({...matchForm, type: e.target.value})}><option value="자유">자유</option><option value="스탠다드">스탠다드</option><option value="래피드">래피드</option><option value="블리츠">블리츠</option><option value="불렛">불렛</option></select></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+                          <PlayerSelector label="백" players={currentPlayers} selectedId={matchForm.whiteId} onSelect={(id) => setMatchForm({...matchForm, whiteId: id})} />
+                          <div className="hidden md:flex absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-full p-2 z-10 shadow-sm border border-gray-200"><span className="font-bold text-gray-400">VS</span></div>
+                          <PlayerSelector label="흑" players={currentPlayers} selectedId={matchForm.blackId} onSelect={(id) => setMatchForm({...matchForm, blackId: id})} />
+                        </div>
+                        <div>
+                          <label className="block text-base font-bold text-gray-800 mb-4 text-center">경기 결과 <span className="text-sm font-normal text-gray-500">(백 선수 기준)</span></label>
+                          <div className="flex flex-col sm:flex-row gap-4 max-w-xl mx-auto">
+                            <label className={`flex-1 flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer ${matchForm.result === '1' ? 'border-blue-600 bg-blue-50 text-blue-800' : 'border-gray-200'}`}><input type="radio" name="result" value="1" className="sr-only" checked={matchForm.result === '1'} onChange={(e) => setMatchForm({...matchForm, result: e.target.value})} /><span className="text-xl font-black mb-1">백 승리</span></label>
+                            <label className={`flex-1 flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer ${matchForm.result === '0.5' ? 'border-gray-600 bg-gray-100 text-gray-800' : 'border-gray-200'}`}><input type="radio" name="result" value="0.5" className="sr-only" checked={matchForm.result === '0.5'} onChange={(e) => setMatchForm({...matchForm, result: e.target.value})} /><span className="text-xl font-black mb-1">무승부</span></label>
+                            <label className={`flex-1 flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer ${matchForm.result === '0' ? 'border-red-600 bg-red-50 text-red-800' : 'border-gray-200'}`}><input type="radio" name="result" value="0" className="sr-only" checked={matchForm.result === '0'} onChange={(e) => setMatchForm({...matchForm, result: e.target.value})} /><span className="text-xl font-black mb-1">흑 승리</span></label>
+                          </div>
+                        </div>
+                        <button onClick={handleAddMatch} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl flex justify-center items-center gap-2 text-lg mt-4"><Icon name="floppy-disk" size={24} /> 경기 기록 추가</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'playerInfo' && (
+                    <div className="space-y-6">
+                      <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Icon name="user" size={24} className="text-blue-600" /> 개별 선수 전적 및 분석</h2>
+                      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-6 items-center z-10 relative">
+                        <div className="flex-1 w-full"><PlayerSelector label="조회할" players={currentPlayers} selectedId={infoTabPlayerId} onSelect={setInfoTabPlayerId} /></div>
+                        <div className="w-full md:w-64">
+                          <label className="block text-sm font-bold text-gray-700 mb-2">분석 기간</label>
+                          <select className="w-full border border-gray-300 rounded-md p-2.5 text-sm outline-none bg-white" value={infoPeriod} onChange={(e) => setInfoPeriod(e.target.value)}>
+                            <option value="1주일">최근 1주일</option><option value="1개월">최근 1개월</option><option value="3개월">최근 3개월</option><option value="6개월">최근 6개월</option><option value="1년">최근 1년</option><option value="전체 기간">전체 기간</option>
+                          </select>
+                        </div>
+                      </div>
+                      {!selectedPlayerInfo ? (
+                        <div className="py-20 text-center text-gray-400 font-medium bg-gray-50 rounded-xl border border-dashed border-gray-300">조회할 선수를 선택해주세요.</div>
+                      ) : (
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {(() => {
+                              const rank = selectedPlayerInfo.player.rank;
+                              let rankCardClass = "bg-blue-50 border-blue-100";
+                              let rankTitleClass = "text-blue-800";
+                              let rankRatingClass = "text-blue-700";
+                              let rankIconClass = "text-blue-200 opacity-50";
+
+                              if (rank === 1) {
+                                rankCardClass = "bg-gradient-to-br from-yellow-100 to-yellow-50 border-yellow-300 shadow-sm";
+                                rankTitleClass = "text-yellow-900"; rankRatingClass = "text-yellow-700"; rankIconClass = "text-yellow-400 opacity-60";
+                              } else if (rank === 2) {
+                                rankCardClass = "bg-gradient-to-br from-gray-200 to-gray-100 border-gray-400 shadow-sm";
+                                rankTitleClass = "text-gray-900"; rankRatingClass = "text-gray-800"; rankIconClass = "text-gray-400 opacity-50";
+                              } else if (rank === 3) {
+                                rankCardClass = "bg-gradient-to-br from-orange-200 to-orange-100 border-orange-400 shadow-sm";
+                                rankTitleClass = "text-orange-950"; rankRatingClass = "text-orange-800"; rankIconClass = "text-orange-500 opacity-40";
+                              }
+
+                              return (
+                                <div className={`p-5 rounded-xl border relative overflow-hidden transition-all ${rankCardClass}`}>
+                                  <div className={`font-bold mb-1 text-sm relative z-10 ${rankTitleClass}`}>현재 ELO 레이팅</div>
+                                  <div className={`text-3xl font-black font-mono relative z-10 ${rankRatingClass}`}>{selectedPlayerInfo.player.rating}</div>
+                                  <Icon name="trophy" size={64} className={`absolute -bottom-4 -right-2 z-0 ${rankIconClass}`} />
+                                </div>
+                              );
+                            })()}
+                            <div className="bg-white p-5 rounded-xl border shadow-sm"><div className="text-gray-500 font-bold mb-1 text-sm">총 전적</div><div className="text-xl font-bold text-gray-800 mb-1">{selectedPlayerInfo.stats.total.w}승 {selectedPlayerInfo.stats.total.d}무 {selectedPlayerInfo.stats.total.l}패</div></div>
+                            <div className="bg-white p-5 rounded-xl border shadow-sm"><div className="text-gray-500 font-bold mb-1 text-sm">백 전적</div><div className="text-xl font-bold text-gray-800">{selectedPlayerInfo.stats.white.w}승 {selectedPlayerInfo.stats.white.d}무 {selectedPlayerInfo.stats.white.l}패</div></div>
+                            <div className="bg-gray-800 p-5 rounded-xl border shadow-sm"><div className="text-gray-400 font-bold mb-1 text-sm">흑 전적</div><div className="text-xl font-bold text-white">{selectedPlayerInfo.stats.black.w}승 {selectedPlayerInfo.stats.black.d}무 {selectedPlayerInfo.stats.black.l}패</div></div>
+                          </div>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="bg-white p-5 rounded-xl border shadow-sm h-[320px]">
+                              <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><Icon name="clock-rotate-left" size={18} className="text-blue-600"/> 레이팅 변동 추이</h3>
+                              <ResponsiveContainer width="100%" height="80%"><LineChart data={selectedPlayerInfo.chartHistory}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="date" tick={{fontSize: 12}}/><YAxis domain={selectedPlayerInfo.yDomain} width={45}/><RechartsTooltip/><Line type="monotone" dataKey="rating" stroke="#2563eb" strokeWidth={3} /></LineChart></ResponsiveContainer>
+                            </div>
+                            <div className="bg-white p-5 rounded-xl border shadow-sm h-[320px]">
+                              <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><Icon name="chess-knight" size={18} className="text-blue-600"/> 진영별 승률 분석</h3>
+                              <ResponsiveContainer width="100%" height="80%"><BarChart data={selectedPlayerInfo.barData}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" tick={{fontSize: 12}}/><YAxis width={30}/><RechartsTooltip content={<CustomBarTooltip/>}/><Legend/><Bar dataKey="승리" fill="#3b82f6" /><Bar dataKey="무승부" fill="#9ca3af" /><Bar dataKey="패배" fill="#ef4444" /></BarChart></ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeTab === 'players' && isAdmin && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      <div className="lg:col-span-1">
+                        <div className="bg-white p-6 rounded-xl border shadow-sm sticky top-4">
+                          <h3 className="text-xl font-bold mb-6 text-gray-800 flex items-center gap-2"><Icon name="plus" size={24} className="text-green-600" /> 신규 선수 등록</h3>
+                          <form onSubmit={handleAddPlayer} className="space-y-5">
+                            <div><label className="block text-sm font-bold text-gray-700 mb-2">학년</label><input ref={gradeInputRef} type="number" className="w-full border rounded-lg p-3 outline-none" value={newPlayer.grade} onChange={(e) => setNewPlayer({...newPlayer, grade: e.target.value})} required /></div>
+                            <div><label className="block text-sm font-bold text-gray-700 mb-2">반</label><input type="number" className="w-full border rounded-lg p-3 outline-none" value={newPlayer.classNum} onChange={(e) => setNewPlayer({...newPlayer, classNum: e.target.value})} required /></div>
+                            <div><label className="block text-sm font-bold text-gray-700 mb-2">이름</label><input type="text" className="w-full border rounded-lg p-3 outline-none" value={newPlayer.name} onChange={(e) => setNewPlayer({...newPlayer, name: e.target.value})} required /></div>
+                            <button type="submit" className="w-full bg-green-600 text-white font-bold py-3 rounded-lg mt-2">등록하기</button>
+                          </form>
+                        </div>
+                      </div>
+                      <div className="lg:col-span-2">
+                        <h3 className="text-xl font-bold text-gray-800 mb-6">전체 선수 목록 ({basePlayers.length}명)</h3>
+                        <div className="overflow-x-auto rounded-lg border shadow-sm h-[600px] overflow-y-auto">
+                          <table className="min-w-full divide-y text-sm text-left">
+                            <thead className="bg-gray-50 sticky top-0"><tr><th className="px-6 py-4">등록번호</th><th className="px-6 py-4">소속</th><th className="px-6 py-4">이름</th><th className="px-6 py-4 text-center">관리</th></tr></thead>
+                            <tbody className="bg-white divide-y">
+                              {basePlayers.slice().reverse().map(player => (
+                                <tr key={player.id} className="hover:bg-gray-50"><td className="px-6 py-3 font-mono">{player.id}</td><td className="px-6 py-3">{player.grade}학년 {player.classNum}반</td><td className="px-6 py-3 font-bold">{player.name}</td><td className="px-6 py-3 text-center"><button onClick={() => handleDeletePlayer(player.id, player.name)} className="text-red-500 border border-red-500 px-3 py-1.5 rounded-md text-xs font-bold">삭제</button></td></tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'history' && (
+                    <div>
+                      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                        <h2 className="text-2xl font-bold text-gray-800">📖 경기 결과 타임라인</h2>
+                        <div className="flex gap-2">
+                          <button onClick={() => setShowFilter(!showFilter)} className="px-4 py-2 rounded-lg text-sm font-bold border flex items-center gap-2"><Icon name="filter" size={16} /> 필터</button>
+                          {isAdmin && <button onClick={handleUndoLastMatch} disabled={matches.length === 0} className="text-red-600 border border-red-200 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Icon name="trash" size={16} /> 마지막 취소</button>}
+                        </div>
+                      </div>
+                      {showFilter && (
+                        <div className="bg-white p-5 rounded-xl border mb-6">
+                          <div className="flex justify-between items-center mb-4"><h3 className="font-bold">경기 검색 필터</h3><button onClick={resetFilter} className="text-sm text-blue-600">초기화</button></div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <label className="block text-sm font-bold mb-2">기간</label>
+                              <select className="border rounded-md p-2 text-sm w-full mb-4" value={filter.period} onChange={(e) => setFilter({...filter, period: e.target.value})}><option value="전체 기간">전체 기간</option><option value="1개월">최근 1개월</option></select>
+                              <label className="block text-sm font-bold mb-2">경기 유형</label>
+                              <div className="flex flex-wrap gap-3">
+                                {allMatchTypes.map(type => <label key={type} className="flex items-center gap-1 text-sm"><input type="checkbox" checked={filter.types.includes(type)} onChange={() => setFilter({...filter, types: filter.types.includes(type) ? filter.types.filter(t => t !== type) : [...filter.types, type]})} /> {type}</label>)}
+                              </div>
+                            </div>
+                            <div className="space-y-4 bg-gray-50 p-4 rounded-lg border flex flex-col justify-center">
+                              <FilterPlayerSelector label="백" players={currentPlayers} selectedId={filter.whiteId} onSelect={(id) => setFilter({...filter, whiteId: id})} />
+                              <FilterPlayerSelector label="흑" players={currentPlayers} selectedId={filter.blackId} onSelect={(id) => setFilter({...filter, blackId: id})} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="overflow-x-auto rounded-lg border shadow-sm">
+                        <table className="min-w-full divide-y text-sm text-center">
+                          <thead className="bg-gray-50"><tr><th className="px-4 py-4">No.</th><th className="px-4 py-4">일자</th><th className="px-4 py-4 bg-white">백</th><th className="px-4 py-4">결과</th><th className="px-4 py-4 bg-gray-800 text-white">흑</th></tr></thead>
+                          <tbody className="bg-white divide-y">
+                            {filteredMatches.slice().reverse().map((match, idx) => {
+                              const w = currentPlayers.find(p => p.id === match.whiteId); const b = currentPlayers.find(p => p.id === match.blackId);
+                              return (
+                                <tr key={match.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-4 text-gray-400">{filteredMatches.length - idx}</td>
+                                  <td className="px-4 py-4"><div className="font-bold">{match.date}</div><div className="text-xs">{match.type}</div></td>
+                                  <td className="px-4 py-4"><div className="font-bold text-lg">{w?.name}</div><div className="text-sm font-bold font-mono">{match.log.whiteChange > 0 ? '+' : ''}{match.log.whiteChange}</div></td>
+                                  <td className="px-4 py-4 font-black bg-gray-50">{match.result === 1 ? <span className="text-blue-600">1 : 0</span> : match.result === 0 ? <span className="text-red-600">0 : 1</span> : <span className="text-gray-600">0.5 : 0.5</span>}</td>
+                                  <td className="px-4 py-4 bg-gray-50"><div className="font-bold text-lg">{b?.name}</div><div className="text-sm font-bold font-mono">{match.log.blackChange > 0 ? '+' : ''}{match.log.blackChange}</div></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </main>
+              </div>
+
+              {/* 하단 플로팅 버튼 (모든 사용자 공통) */}
+              <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-40">
+                <button onClick={() => setIsSyncModalOpen(true)} className="bg-blue-600 text-white shadow-xl px-5 py-3.5 rounded-full font-bold text-sm flex items-center justify-center gap-2.5 hover:bg-blue-700">
+                  <Icon name="cloud" size={18} /> 클라우드 연동
+                </button>
+                
+                {/* 관리자 전용: 백업/복원 버튼 */}
+                {isAdmin && (
+                  <>
+                    <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImport} />
+                    <button onClick={handleExport} className="bg-white text-gray-700 border shadow-xl px-5 py-3.5 rounded-full font-bold text-sm flex items-center justify-center gap-2.5 hover:bg-gray-50">
+                      <Icon name="download" size={18} /> 내보내기
+                    </button>
+                    <button onClick={() => fileInputRef.current?.click()} className="bg-gray-800 text-white shadow-xl px-5 py-3.5 rounded-full font-bold text-sm flex items-center justify-center gap-2.5 hover:bg-gray-700">
+                      <Icon name="upload" size={18} /> 불러오기
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
